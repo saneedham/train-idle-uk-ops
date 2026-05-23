@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PYTHONPATH: ${{ github.workspace }}
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     strategy:
       fail-fast: false
       matrix:
@@ -19,21 +20,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           token: ${{ github.token }}
           fetch-depth: 1
-
-      - name: Debug workspace
-        run: |
-          pwd
-          ls -la
-          find . -maxdepth 2 -type f -name "train_idle.py" -print
-          python -c "import sys, os; print('cwd=', os.getcwd()); print('sys.path[0]=', sys.path[0]); print('workspace contains train_idle.py=', os.path.exists('train_idle.py'))"
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
 
       - name: Install tooling
         run: |
