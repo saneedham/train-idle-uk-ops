@@ -31,14 +31,15 @@ import math
 import os
 import shlex
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 
 from train_idle.data import DEVON_BUNDLE, PANEL_POS_DEFAULT, SERVICE_TEMPLATES, TRAIN_MODELS
+from train_idle.graph import build_active_adjacency, dijkstra_path
 from train_idle.models import Edge, GameState, Node, Service, Train, TrainModel
+from train_idle.realism import RealismInfo, apply_realism_overrides_to_world, load_realism_overrides
 
 SAVE_FILE = 'train_idle_save_v05661.json'
 REGION_DIR = 'regions'
-REALISM_DIR = 'realism'
 DEFAULT_REGION_ID = 'devon'
 
 # -----------------------------
@@ -311,69 +312,6 @@ def attr_for(state, role: str, bold: bool = False) -> int:
     if bold:
         a |= curses.A_BOLD
     return a
-
-
-# -----------------------------
-# Realism overrides loading
-# -----------------------------
-
-
-@dataclass
-class RealismInfo:
-    path: str = ''
-    loaded: bool = False
-    edge_overrides: dict[str, dict] = field(default_factory=dict)
-
-
-def realism_path_for(region_id: str) -> str:
-    return os.path.join(REALISM_DIR, f'{region_id}.json')
-
-
-def load_realism_overrides(region_id: str) -> RealismInfo:
-    os.makedirs(REALISM_DIR, exist_ok=True)
-    path = realism_path_for(region_id)
-    if not os.path.exists(path):
-        # If missing and devon: seed from embedded defaults (created on first run)
-        # Otherwise: create an empty scaffold.
-        if region_id != 'devon':
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(
-                    {
-                        'meta': {'region_id': region_id, 'notes': ['Fill edges{} with overrides.']},
-                        'edges': {},
-                    },
-                    f,
-                    indent=2,
-                )
-    try:
-        with open(path, encoding='utf-8') as f:
-            data = json.load(f)
-        edge_overrides = dict(data.get('edges', {}))
-        return RealismInfo(path=path, loaded=True, edge_overrides=edge_overrides)
-    except Exception:
-        return RealismInfo(path=path, loaded=False, edge_overrides={})
-
-
-def apply_realism_overrides_to_world(world: 'World', realism: RealismInfo) -> int:
-    """Apply overrides to world.edges. Returns count applied."""
-    applied = 0
-    for eid, ov in (realism.edge_overrides or {}).items():
-        e = world.edges.get(eid)
-        if not e:
-            continue
-        changed = False
-        if 'tracks' in ov and ov['tracks'] is not None:
-            e.tracks = int(ov['tracks'])
-            changed = True
-        if 'bidir' in ov and ov['bidir'] is not None:
-            e.bidir = bool(ov['bidir'])
-            changed = True
-        if 'speed_kmh' in ov and ov['speed_kmh'] is not None:
-            e.speed_kmh = float(ov['speed_kmh'])
-            changed = True
-        if changed:
-            applied += 1
-    return applied
 
 
 # -----------------------------
@@ -689,58 +627,6 @@ def build_ops_report(state: GameState, services: dict[str, Service], now_t: floa
         'Notes: headway measured between terminus completions; HW% is closeness of avg headway to target (0..100).'
     )
     return '\n'.join(out)
-
-
-# -----------------------------
-# Graph/pathfinding (directionality)
-# -----------------------------
-
-
-def build_active_adjacency(world: World, state: GameState) -> dict[str, list[tuple[str, str, float]]]:
-    adj: dict[str, list[tuple[str, str, float]]] = {}
-    for eid in set(state.discovered_edges):
-        e = world.edges.get(eid)
-        if not e:
-            continue
-        adj.setdefault(e.a, []).append((e.b, eid, e.km))
-        if e.bidir:
-            adj.setdefault(e.b, []).append((e.a, eid, e.km))
-    return adj
-
-
-def dijkstra_path(
-    adj: dict[str, list[tuple[str, str, float]]], start: str, goal: str
-) -> tuple[list[str], list[str], float]:
-    if start == goal:
-        return [start], [], 0.0
-    dist = {start: 0.0}
-    prev: dict[str, tuple[str, str]] = {}
-    pq = [(0.0, start)]
-    while pq:
-        d, u = heapq.heappop(pq)
-        if u == goal:
-            break
-        if d != dist.get(u, float('inf')):
-            continue
-        for v, eid, km in adj.get(u, []):
-            nd = d + km
-            if nd < dist.get(v, float('inf')):
-                dist[v] = nd
-                prev[v] = (u, eid)
-                heapq.heappush(pq, (nd, v))
-    if goal not in dist:
-        return [start], [], float('inf')
-    nodes = [goal]
-    edges: list[str] = []
-    cur = goal
-    while cur != start:
-        p, eid = prev[cur]
-        edges.append(eid)
-        nodes.append(p)
-        cur = p
-    nodes.reverse()
-    edges.reverse()
-    return nodes, edges, dist[goal]
 
 
 # -----------------------------
