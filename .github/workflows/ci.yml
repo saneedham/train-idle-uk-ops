@@ -4,36 +4,42 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12"]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+          fetch-depth: 1
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install tooling
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest
+          pip install "ruff==0.6.9" pytest
 
-      - name: Lint (Ruff)
+      - name: Lint (ruff)
         run: ruff check .
 
-      - name: Format check (Ruff)
+      - name: Format check (ruff)
         run: ruff format --check .
 
-      - name: Syntax check (compileall)
+      - name: Syntax check
         run: python -m compileall -q .
 
-      - name: Run tests
+      - name: Tests
         run: pytest
