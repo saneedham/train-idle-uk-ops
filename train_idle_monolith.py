@@ -1669,7 +1669,11 @@ def ui_main(stdscr):
     world.panel_pos = dict(PANEL_POS_DEFAULT)
     world.load_region_file(DEFAULT_REGION_ID)
 
-    state = load_game() or new_game()
+    state = load_game()
+    if state is None:
+        state = new_game()
+    log_event(state, 'New game started. Quiet logging is ON (use verbose to toggle).', level='important')
+
     init_theme_colors(state)
 
     if not state.trains:
