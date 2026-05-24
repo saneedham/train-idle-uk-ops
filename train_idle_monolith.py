@@ -33,6 +33,13 @@ import shlex
 import time
 from dataclasses import asdict
 
+from train_idle.blocks import (
+    block_is_free,
+    block_release,
+    block_reserve,
+    make_block_for_edge,
+    rebuild_blocks,
+)
 from train_idle.data import DEVON_BUNDLE, PANEL_POS_DEFAULT, SERVICE_TEMPLATES, TRAIN_MODELS
 from train_idle.graph import build_active_adjacency, dijkstra_path
 from train_idle.models import Edge, GameState, Node, Service, Train, TrainModel
@@ -718,51 +725,6 @@ def build_available_services(world: World, state: GameState) -> dict[str, Servic
             grace_pct=tmpl.grace_pct,
         )
     return services
-
-
-# -----------------------------
-# Blocks
-# -----------------------------
-
-
-def make_block_for_edge(e: Edge) -> dict:
-    return {'mode': 'single', 'occ': None} if e.tracks <= 1 else {'mode': 'dir', 'occ_fwd': None, 'occ_rev': None}
-
-
-def rebuild_blocks(world: World, state: GameState, blocks: dict[str, dict]) -> None:
-    """Rebuild blocks for discovered edges, respecting current tracks in world.edges."""
-    blocks.clear()
-    for eid in state.discovered_edges:
-        e = world.edges.get(eid)
-        if e:
-            blocks[eid] = make_block_for_edge(e)
-
-
-def block_is_free(block: dict, dir_sign: int) -> bool:
-    if block['mode'] == 'single':
-        return block['occ'] is None
-    return (block['occ_fwd'] is None) if dir_sign > 0 else (block['occ_rev'] is None)
-
-
-def block_reserve(block: dict, tid: int, dir_sign: int) -> None:
-    if block['mode'] == 'single':
-        block['occ'] = tid
-    else:
-        if dir_sign > 0:
-            block['occ_fwd'] = tid
-        else:
-            block['occ_rev'] = tid
-
-
-def block_release(block: dict, tid: int) -> None:
-    if block['mode'] == 'single':
-        if block.get('occ') == tid:
-            block['occ'] = None
-    else:
-        if block.get('occ_fwd') == tid:
-            block['occ_fwd'] = None
-        if block.get('occ_rev') == tid:
-            block['occ_rev'] = None
 
 
 # -----------------------------
