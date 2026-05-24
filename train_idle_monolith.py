@@ -31,7 +31,6 @@ import math
 import os
 import shlex
 import time
-from dataclasses import asdict
 
 from train_idle.blocks import (
     block_is_free,
@@ -44,8 +43,8 @@ from train_idle.data import DEVON_BUNDLE, PANEL_POS_DEFAULT, SERVICE_TEMPLATES, 
 from train_idle.graph import build_active_adjacency, dijkstra_path
 from train_idle.models import Edge, GameState, Node, Service, Train, TrainModel
 from train_idle.realism import RealismInfo, apply_realism_overrides_to_world, load_realism_overrides
+from train_idle.save import load_game, new_game, save_game
 
-SAVE_FILE = 'train_idle_save_v05661.json'
 REGION_DIR = 'regions'
 DEFAULT_REGION_ID = 'devon'
 
@@ -1127,62 +1126,6 @@ def simulate(
         t = state.trains[idx]
         if t.service_id and t.service_id in services:
             heapq.heappush(pq, (float(t.next_event_t), idx))
-
-
-# -----------------------------
-# Save/load
-# -----------------------------
-
-
-def save_game(state: GameState) -> None:
-    with open(SAVE_FILE, 'w', encoding='utf-8') as f:
-        json.dump(asdict(state), f, indent=2)
-
-
-def load_game() -> GameState | None:
-    if not os.path.exists(SAVE_FILE):
-        return None
-    with open(SAVE_FILE, encoding='utf-8') as f:
-        data = json.load(f)
-    return GameState(
-        money=float(data.get('money', 300.0)),
-        home=data.get('home'),
-        trains=[Train(**t) for t in data.get('trains', [])],
-        next_train_id=int(data.get('next_train_id', 1)),
-        game_time=float(data.get('game_time', 0.0)),
-        time_scale=float(data.get('time_scale', 60.0)),
-        paused=bool(data.get('paused', False)),
-        last_real_time=float(data.get('last_real_time', time.time())),
-        region_ids_loaded=list(data.get('region_ids_loaded', [DEFAULT_REGION_ID])),
-        discovered_nodes=list(data.get('discovered_nodes', [])),
-        discovered_edges=list(data.get('discovered_edges', [])),
-        last_unlock_options=dict(data.get('last_unlock_options', {})),
-        msg_log=list(data.get('msg_log', [])),
-        ui_show_map=bool(data.get('ui_show_map', True)),
-        verbose=bool(data.get('verbose', False)),
-        pinned_override_lines=list(data.get('pinned_override_lines', [])),
-        pinned_override_until_game=float(data.get('pinned_override_until_game', 0.0)),
-        cmd_history=list(data.get('cmd_history', [])),
-        cmd_hist_idx=int(data.get('cmd_hist_idx', -1)),
-        svc_last_complete=dict(data.get('svc_last_complete', {})),
-        svc_ontime_flags=dict(data.get('svc_ontime_flags', {})),
-        svc_headway_hist_s=dict(data.get('svc_headway_hist_s', {})),
-        view_cx=float(data.get('view_cx', 52.0)),
-        view_cy=float(data.get('view_cy', 10.0)),
-        view_zoom=float(data.get('view_zoom', 1.0)),
-        follow_train_id=data.get('follow_train_id', None),
-        color_enabled=bool(data.get('color_enabled', True)),
-        theme_flavor=str(data.get('theme_flavor', 'mocha')),
-    )
-
-
-def new_game() -> GameState:
-    st = GameState()
-    st.region_ids_loaded = [DEFAULT_REGION_ID]
-    st.trains.append(Train(id=0, model_id='dmu'))
-    st.next_train_id = 1
-    log_event(st, 'New game started. Quiet logging is ON (use verbose to toggle).', level='important')
-    return st
 
 
 # -----------------------------
